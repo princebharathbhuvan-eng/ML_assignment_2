@@ -41,51 +41,6 @@ def ensure_artifacts_exist():
         return False
 
 
-def ensure_balanced_csv_exists():
-    """
-    Create a balanced fraud vs non-fraud CSV from Kaggle dataset if missing.
-    Output contains ONLY features (no Class column).
-    """
-    if os.path.exists(BALANCED_CSV_PATH):
-        return True
-
-    try:
-        import kagglehub  # needs to be in requirements.txt
-
-        st.info("Generating balanced sample CSV (fraud vs non-fraud) for download...")
-
-        path = kagglehub.dataset_download("mlg-ulb/creditcardfraud")
-        csv_path = os.path.join(path, "creditcard.csv")
-        df = pd.read_csv(csv_path)
-
-        fraud = df[df["Class"] == 1]
-        nonfraud = df[df["Class"] == 0]
-
-        if len(fraud) < N_PER_CLASS:
-            st.error(f"Not enough fraud samples in dataset ({len(fraud)}) to create {N_PER_CLASS} per class.")
-            return False
-
-        balanced = pd.concat(
-            [
-                fraud.sample(N_PER_CLASS, random_state=42),
-                nonfraud.sample(N_PER_CLASS, random_state=42),
-            ],
-            axis=0,
-        ).sample(frac=1, random_state=42).reset_index(drop=True)
-
-        balanced_features = balanced.drop(columns=["Class"])
-
-        os.makedirs(os.path.dirname(BALANCED_CSV_PATH), exist_ok=True)
-        balanced_features.to_csv(BALANCED_CSV_PATH, index=False)
-
-        st.success(f"Balanced CSV generated: {BALANCED_CSV_PATH}")
-        return True
-
-    except Exception as e:
-        st.error("Could not generate balanced CSV. (Usually Kaggle auth or missing dependency.)")
-        st.code(str(e))
-        return False
-
 
 # 1) Ensure artifacts exist (metrics/models)
 ok = ensure_artifacts_exist()
@@ -96,27 +51,7 @@ if not ok:
 metrics_df = pd.read_csv(METRICS_PATH)
 confusion_store = joblib.load(CM_PATH)
 
-# 3) Download button section
-st.subheader("Download Sample Test Data (Balanced Fraud vs Non-Fraud)")
 
-balanced_ok = ensure_balanced_csv_exists()
-if balanced_ok and os.path.exists(BALANCED_CSV_PATH):
-    balanced_df = pd.read_csv(BALANCED_CSV_PATH)
-
-    st.caption(f"Generated with {N_PER_CLASS} fraud + {N_PER_CLASS} non-fraud rows (features only).")
-    st.dataframe(balanced_df.head())
-
-    csv_bytes = balanced_df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="⬇️ Download balanced_test_data.csv",
-        data=csv_bytes,
-        file_name="balanced_test_data.csv",
-        mime="text/csv",
-    )
-else:
-    st.info("Balanced sample not available yet. Check Kaggle setup and try again.")
-
-st.divider()
 
 
 # Model filename mapping (must match train_models.py output)
